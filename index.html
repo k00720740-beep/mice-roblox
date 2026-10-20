@@ -13,7 +13,15 @@ button{font:inherit;font-weight:700;background:#2e7d32;color:#fff;border:0;borde
 <p id="status">ارجع للعبة بعد الربط، واضغط زر المايك هناك.</p></div>
 <script>
 const t=new URLSearchParams(location.search).get('t'),$=id=>document.getElementById(id);
-const ICE=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+
+// تم تحديث وإضافة سيرفرات STUN إضافية لضمان الاتصال المباشر وصوت واضح
+const ICE=[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:stun.stunprotocol.org:3478'},
+  {urls:'stun:stun.sipgate.net:3478'}
+];
+
 const BOOST=5;      // تكبير صوت اللي تسمعهم
 const MIC_BOOST=3;  // تكبير صوتك قبل الإرسال
 let ws,me,stream,ctx,on=false,near={},peers={};
@@ -64,7 +72,6 @@ function mk(id){
   stream.getTracks().forEach(tr=>pc.addTrack(tr,stream));
   pc.onicecandidate=e=>e.candidate&&send({type:'signal',to:id,data:{c:e.candidate}});
   
-  // تم تعديل muted إلى false هنا عشان يطلع الصوت وتسمعون بعض
   pc.ontrack=e=>{const s=e.streams[0],a=new Audio();a.srcObject=s;a.muted=false;a.play().catch(()=>{});
     const g=ctx.createGain();g.gain.value=(near[id]||0)*BOOST;
     ctx.createMediaStreamSource(s).connect(g).connect(limiter()).connect(ctx.destination);p.gain=g};
