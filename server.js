@@ -2,7 +2,7 @@ const express = require('express'), http = require('http'), crypto = require('cr
 const { WebSocketServer } = require('ws');
 const SECRET = process.env.GAME_SECRET || 'CHANGE_ME';
 const RANGE = Number(process.env.RANGE || 60); // studs
-const app = express(); app.use(express.json());  app.use(express.static(__dirname))
+const app = express(); app.use(express.json()); app.use(express.static('public'));
 const server = http.createServer(app), wss = new WebSocketServer({ server });
 const tokens = new Map(), users = new Map();
 const auth = (req, res, next) => req.body.secret === SECRET ? next() : res.sendStatus(403);
@@ -29,7 +29,7 @@ app.post('/sync', auth, (req, res) => {
       const b = users.get(String(q.id));
       if (!b || b === a || !b.on) continue;
       const d = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
-      if (d < RANGE) near.push({ id: String(q.id), g: Math.pow(1 - d / RANGE, 2) });
+      if (d < RANGE) near.push({ id: String(q.id), g: d < 10 ? 1 : (RANGE - d) / (RANGE - 10) });
     }
     a.ws.send(JSON.stringify({ type: 'state', on: a.on, near }));
   }
