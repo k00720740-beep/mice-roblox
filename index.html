@@ -14,7 +14,6 @@ button{font:inherit;font-weight:700;background:#2e7d32;color:#fff;border:0;borde
 <script>
 const t=new URLSearchParams(location.search).get('t'),$=id=>document.getElementById(id);
 
-// تم تحديث وإضافة سيرفرات STUN إضافية لضمان الاتصال المباشر وصوت واضح
 const ICE=[
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'stun:stun1.l.google.com:19302'},
@@ -48,7 +47,8 @@ $('link').onclick=async()=>{
   const mg=ctx.createGain();mg.gain.value=MIC_BOOST;
   const dest=ctx.createMediaStreamDestination();
   src.connect(mg);mg.connect(limiter()).connect(dest);
-  stream=dest.stream;stream.getAudioTracks()[0].enabled=false;
+  stream=dest.stream;
+  if(stream.getAudioTracks()[0]) stream.getAudioTracks()[0].enabled=false;
   const an=ctx.createAnalyser();an.fftSize=512;src.connect(an);
   const buf=new Uint8Array(an.fftSize);
   setInterval(()=>{an.getByteTimeDomainData(buf);let s=0;for(const v of buf){const x=(v-128)/128;s+=x*x}
@@ -58,8 +58,12 @@ $('link').onclick=async()=>{
   $('status').textContent='تم الربط. ارجع للعبة واضغط زر المايك.';
 };
 function onState(m){
-  on=m.on;if(stream)stream.getAudioTracks()[0].enabled=on;
-  if(stream)$('status').textContent=on?'المايك شغال':'المايك مقفل';
+  on=m.on;
+  // التعديل هنا: نقفل ونشغل مسار المايك حقك فقط بدون إغلاق الاتصال الصوتي العام
+  if(stream && stream.getAudioTracks()[0]) {
+    stream.getAudioTracks()[0].enabled = on;
+  }
+  if(stream)$('status').textContent=on?'المايك شغال':'المايك مقفل (تسمعهم بس)';
   near={};m.near.forEach(n=>near[n.id]=n.g);
   for(const id in peers)if(!(id in near)){peers[id].pc.close();delete peers[id]}
   for(const id in near){
