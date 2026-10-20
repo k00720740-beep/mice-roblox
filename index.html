@@ -63,9 +63,12 @@ function mk(id){
   const pc=new RTCPeerConnection({iceServers:ICE}),p={pc,q:[],gain:null};
   stream.getTracks().forEach(tr=>pc.addTrack(tr,stream));
   pc.onicecandidate=e=>e.candidate&&send({type:'signal',to:id,data:{c:e.candidate}});
-  pc.ontrack=e=>{const s=e.streams[0],a=new Audio();a.srcObject=s;a.muted=true;a.play().catch(()=>{});
+  
+  // تم تعديل muted إلى false هنا عشان يطلع الصوت وتسمعون بعض
+  pc.ontrack=e=>{const s=e.streams[0],a=new Audio();a.srcObject=s;a.muted=false;a.play().catch(()=>{});
     const g=ctx.createGain();g.gain.value=(near[id]||0)*BOOST;
     ctx.createMediaStreamSource(s).connect(g).connect(limiter()).connect(ctx.destination);p.gain=g};
+    
   pc.onconnectionstatechange=()=>{if(pc.connectionState=='failed'&&peers[id]===p){pc.close();delete peers[id]}};
   peers[id]=p;return p;
 }
