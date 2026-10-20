@@ -13,6 +13,8 @@ button{font:inherit;font-weight:700;background:#2e7d32;color:#fff;border:0;borde
 <p id="status">ارجع للعبة بعد الربط، واضغط زر المايك هناك.</p></div>
 <script>
 const t=new URLSearchParams(location.search).get('t'),$=id=>document.getElementById(id);
+
+// تم تحديث وإضافة سيرفرات STUN إضافية لضمان الاتصال المباشر وصوت واضح
 const ICE=[
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'stun:stun1.l.google.com:19302'},
@@ -20,9 +22,8 @@ const ICE=[
   {urls:'stun:stun.sipgate.net:3478'}
 ];
 
-// قيم متوازنة لصوت واضح ونقي بدون شوشرة
-const BOOST=4;     
-const MIC_BOOST=2; 
+const BOOST=5;      // تكبير صوت اللي تسمعهم
+const MIC_BOOST=3;  // تكبير صوتك قبل الإرسال
 let ws,me,stream,ctx,on=false,near={},peers={};
 const send=o=>ws&&ws.readyState==1&&ws.send(JSON.stringify(o));
 function connect(){
@@ -36,38 +37,18 @@ function connect(){
   ws.onclose=()=>setTimeout(connect,2000);
 }
 connect();
-
-// فلتر لتنقية الصوت وإزالة الشوشرة
-function limiter(){
-  const c=ctx.createDynamicsCompressor();
-  c.threshold.value=-20;
-  c.knee.value=15;
-  c.ratio.value=6;
-  c.attack.value=0.005;
-  c.release.value=0.15;
-  return c;
-}
-
+function limiter(){const c=ctx.createDynamicsCompressor();
+  c.threshold.value=-24;c.knee.value=20;c.ratio.value=8;c.attack.value=0.003;c.release.value=0.2;return c}
 $('link').onclick=async()=>{
   ctx=new AudioContext();await ctx.resume();
   let raw;
-  try{
-    raw=await navigator.mediaDevices.getUserMedia({
-      audio:{
-        echoCancellation:true,  // منع الصدى
-        noiseSuppression:true,  // عزل الضوضاء والشوشرة
-        autoGainControl:true    // توازن الصوت التلقائي
-      }
-    })
-  }
+  try{raw=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
   catch{return $('status').textContent='لازم تسمح للمايك'}
-  
   const src=ctx.createMediaStreamSource(raw);
   const mg=ctx.createGain();mg.gain.value=MIC_BOOST;
   const dest=ctx.createMediaStreamDestination();
   src.connect(mg);mg.connect(limiter()).connect(dest);
-  stream=dest.stream;
-  
+  stream=dest.stream;stream.getAudioTracks()[0].enabled=false;
   const an=ctx.createAnalyser();an.fftSize=512;src.connect(an);
   const buf=new Uint8Array(an.fftSize);
   setInterval(()=>{an.getByteTimeDomainData(buf);let s=0;for(const v of buf){const x=(v-128)/128;s+=x*x}
@@ -76,37 +57,28 @@ $('link').onclick=async()=>{
   send({type:'ready'});$('link').style.display='none';
   $('status').textContent='تم الربط. ارجع للعبة واضغط زر المايك.';
 };
-
 function onState(m){
-  on=m.on;
-  if(stream && stream.getAudioTracks()[0]) {
-    stream.getAudioTracks()[0].enabled = on; // التحكم بالمايك الخاص بك فقط
-  }
-  if(stream)$('status').textContent=on?'المايك شغال':'المايك مقفل (تسمعهم بس)';
+  on=m.on;if(stream)stream.getAudioTracks()[0].enabled=on;
+  if(stream)$('status').textContent=on?'المايك شغال':'المايك مقفل';
   near={};m.near.forEach(n=>near[n.id]=n.g);
   for(const id in peers)if(!(id in near)){peers[id].pc.close();delete peers[id]}
   for(const id in near){
     if(!peers[id]&&stream&&Number(me.id)<Number(id))call(id);
-    if(peers[id]&&peers[id].gain)peers[id].gain.gain.value=(near[id]||1)*BOOST;
+    if(peers[id]&&peers[id].gain)peers[id].gain.gain.value=near[id]*BOOST;
   }
 }
-
 function mk(id){
   const pc=new RTCPeerConnection({iceServers:ICE}),p={pc,q:[],gain:null};
   stream.getTracks().forEach(tr=>pc.addTrack(tr,stream));
   pc.onicecandidate=e=>e.candidate&&send({type:'signal',to:id,data:{c:e.candidate}});
   
-  pc.ontrack=e=>{
-    const s=e.streams[0],a=new Audio();a.srcObject=s;a.muted=false;a.play().catch(()=>{});
-    const g=ctx.createGain();g.gain.value=BOOST;
-    ctx.createMediaStreamSource(s).connect(g).connect(limiter()).connect(ctx.destination);
-    p.gain=g;
-  };
+  pc.ontrack=e=>{const s=e.streams[0],a=new Audio();a.srcObject=s;a.muted=false;a.play().catch(()=>{});
+    const g=ctx.createGain();g.gain.value=(near[id]||0)*BOOST;
+    ctx.createMediaStreamSource(s).connect(g).connect(limiter()).connect(ctx.destination);p.gain=g};
     
   pc.onconnectionstatechange=()=>{if(pc.connectionState=='failed'&&peers[id]===p){pc.close();delete peers[id]}};
   peers[id]=p;return p;
 }
-
 async function call(id){const p=mk(id);await p.pc.setLocalDescription(await p.pc.createOffer());
   send({type:'signal',to:id,data:{sdp:p.pc.localDescription}})}
 async function flush(p){for(const c of p.q)await p.pc.addIceCandidate(c).catch(()=>{});p.q=[]}
