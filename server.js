@@ -1,8 +1,17 @@
-const express = require('express'), http = require('http'), crypto = require('crypto');
+const express = require('express'), http = require('http'), crypto = require('crypto'), path = require('path');
 const { WebSocketServer } = require('ws');
+
 const SECRET = process.env.GAME_SECRET || 'CHANGE_ME';
 const RANGE = Number(process.env.RANGE || 60); // studs
-const app = express(); app.use(express.json()); app.use(express.static('public'));
+
+const app = express(); 
+app.use(express.json());
+
+// عرض ملف index.html مباشرة من المجلد الرئيسي
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 const server = http.createServer(app), wss = new WebSocketServer({ server });
 const tokens = new Map(), users = new Map();
 const auth = (req, res, next) => req.body.secret === SECRET ? next() : res.sendStatus(403);
@@ -57,4 +66,5 @@ wss.on('connection', ws => {
   });
   ws.on('close', () => { if (id && users.get(id)?.ws === ws) users.delete(id); });
 });
+
 server.listen(process.env.PORT || 3000);
