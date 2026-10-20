@@ -7,7 +7,6 @@ const RANGE = Number(process.env.RANGE || 60); // studs
 const app = express(); 
 app.use(express.json());
 
-// عرض ملف index.html مباشرة من المجلد الرئيسي
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -20,6 +19,7 @@ app.post('/token', auth, (req, res) => {
   const { userId, name } = req.body, t = crypto.randomBytes(16).toString('hex');
   tokens.set(t, { userId: String(userId), name, exp: Date.now() + 3600e3 });
   const base = process.env.PUBLIC_URL || 'https://' + req.headers.host;
+  console.log(`[TOKEN] تم إنشاء رابط للاعب: ${name} (${userId})`);
   res.json({ url: `${base}/?t=${t}` });
 });
 
@@ -54,17 +54,29 @@ wss.on('connection', ws => {
       if (!t || t.exp < Date.now()) return ws.send(JSON.stringify({ type: 'bad' }));
       id = t.userId;
       users.set(id, { ws, name: t.name, ready: !!m.ready, on: false, level: 0, pos: null });
+      console.log(`[WS] متصل جديد: ${t.name} (${id})`);
       return ws.send(JSON.stringify({ type: 'hello', id, name: t.name }));
     }
     const u = id && users.get(id); if (!u || u.ws !== ws) return;
-    if (m.type === 'ready') u.ready = true;
+    if (m.type === 'ready') {
+      u.ready = true;
+      console.log(`[WS] اللاعب ${u.name} جاهز ومربوط بالمايك`);
+    }
     else if (m.type === 'level') u.level = Math.max(0, Math.min(1, +m.v || 0));
     else if (m.type === 'signal') {
       const to = users.get(String(m.to));
-      if (to && to.ws.readyState === 1) to.ws.send(JSON.stringify({ type: 'signal', from: id, data: m.data }));
+      if (to && to.ws.readyState === 1) {
+        console.log(`[SIGNAL] نقل إشارة صوتية من ${id} إلى ${m.to}`);
+        to.ws.send(JSON.stringify({ type: 'signal', from: id, data: m.data }));
+      }
     }
   });
-  ws.on('close', () => { if (id && users.get(id)?.ws === ws) users.delete(id); });
+  ws.on('close', () => { 
+    if (id && users.get(id)?.ws === ws) {
+      console.log(`[WS] انقطع اتصال اللاعب: ${id}`);
+      users.delete(id); 
+    }
+  });
 });
 
 server.listen(process.env.PORT || 3000);
