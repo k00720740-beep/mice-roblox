@@ -34,9 +34,9 @@ app.post('/sync', auth, (req, res) => {
   for (const p of list) {
     const a = users.get(String(p.id)); if (!a || a.ws.readyState !== 1) continue;
     const near = [];
-    if (a.on) for (const q of list) {
+    if (a.ready) for (const q of list) {
       const b = users.get(String(q.id));
-      if (!b || b === a || !b.on) continue;
+      if (!b || b === a || !b.ready) continue;
       const d = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
       if (d < RANGE) near.push({ id: String(q.id), g: d < 10 ? 1 : (RANGE - d) / (RANGE - 10) });
     }
